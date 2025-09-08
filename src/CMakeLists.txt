@@ -1,6 +1,6 @@
 add_subdirectory(acc2cuda)
 add_subdirectory(cuda2acc)
 add_subdirectory(accObj_cudaKernel)
-add_subdirectory(Test_4)
-add_subdirectory(Test_5)
+add_subdirectory(accAOO_cudaKernel)
+add_subdirectory(cudaObj_accKernels)
 add_subdirectory(Test_6)

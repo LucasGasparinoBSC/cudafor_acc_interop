@@ -1,3 +1,4 @@
+! Object with allocatable arrays
 module myTypes
     implicit none
         type :: myType_1
@@ -5,6 +6,7 @@ module myTypes
         end type myType_1
 end module myTypes
 
+! CUDA Fortran kernel operating on an array of objects (AOO)
 module myKernels
     use myTypes
     use cudafor
@@ -16,8 +18,9 @@ module myKernels
             integer, value :: nobj, n
             type(myType_1), intent(inout) :: objArr(nobj)
 
-            objId = blockIdx%x
-            arrId = threadIdx%x
+            ! No bounds check in this example, assuming small number of blocks/threads
+            objId = blockIdx%x ! One object per block
+            arrId = threadIdx%x ! One data point per thread
 
             objArr(objId)%y(arrId) = objArr(objId)%x(arrId) + objArr(objId)%y(arrId)
         end subroutine myKernel_1
@@ -34,8 +37,10 @@ program main
     integer :: nblocks, nthreads, iObj, i, irun
     integer, parameter :: N = 256
     integer, parameter :: numObj = 1000
-    type(myType_1), allocatable :: obj_array(:)
+    type(myType_1), allocatable :: obj_array(:) ! AOO to be allocated on both host and device
 
+    ! Generate host/device AOO
+    ! NOTE: requires a loop over each object to allocate the attributes on both host and device
     allocate(obj_array(numObj))
     !$acc enter data create(obj_array)
     do i = 1, numObj
@@ -43,6 +48,8 @@ program main
         !$acc enter data create(obj_array(i), obj_array(i)%x, obj_array(i)%y)
     end do
 
+    ! ACC LOOP to initialize the AOO on the device
+    ! Note: gangs operate on object indexes, vectors on array indices
     !$acc parallel loop gang
     do iObj = 1, numObj
         !$acc loop vector
@@ -53,11 +60,14 @@ program main
     end do
     !$acc end parallel loop
 
+    ! Print the initial values of the first element of each object
     do iObj = 1, numObj
+        ! Update the host for each object in sequence
         !$acc update host(obj_array(iObj)%x, obj_array(iObj)%y)
         print*, "obj_array(", iObj, ") x(1) = ", obj_array(iObj)%x(1), " y(1) = ", obj_array(iObj)%y(1)
     end do
 
+    ! Launch the kernel 10 times to ensure data is persistent on device
     nthreads = N
     nblocks = numObj
     !$acc host_data use_device(obj_array)
@@ -66,6 +76,7 @@ program main
     end do
     !$acc end host_data
 
+    ! Print final result
     do iObj = 1, numObj
         !$acc update host(obj_array(iObj)%y)
         print*, "obj_array(", iObj, ")", " y(1) = ", obj_array(iObj)%y(1)
